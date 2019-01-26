@@ -1000,7 +1000,6 @@ macro_rules! impl_disk_cacheable_query(
     }
 );
 
-impl_disk_cacheable_query!(unsafety_check_result, |def_id| def_id.is_local());
 impl_disk_cacheable_query!(borrowck, |def_id| def_id.is_local());
 impl_disk_cacheable_query!(mir_borrowck, |def_id| def_id.is_local());
 impl_disk_cacheable_query!(mir_const_qualif, |def_id| def_id.is_local());

@@ -244,7 +244,7 @@ define_queries! { <'tcx>
 
     TypeChecking {
         /// The result of unsafety-checking this def-id.
-        [] fn unsafety_check_result: UnsafetyCheckResult(DefId) -> mir::UnsafetyCheckResult,
+        [] fn unsafety_check_result: UnsafetyCheckResult(DefId) -> (),
 
         /// HACK: when evaluated, this reports a "unsafe derive on repr(packed)" error
         [] fn unsafe_derive_on_repr_packed: UnsafeDeriveOnReprPacked(DefId) -> (),

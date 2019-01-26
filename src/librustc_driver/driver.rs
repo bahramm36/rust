@@ -1274,18 +1274,20 @@ where
                 }
             });
 
-            time(sess,
-                 "MIR borrow checking",
-                 || tcx.par_body_owners(|def_id| { tcx.mir_borrowck(def_id); }));
+            time(sess, "MIR checking", || {
+                tcx.par_body_owners(|def_id| {
+                    tcx.ensure().mir_borrowck(def_id);
+                })
+            });
 
             time(sess, "dumping chalk-like clauses", || {
                 rustc_traits::lowering::dump_program_clauses(tcx);
             });
 
             time(sess, "MIR effect checking", || {
-                for def_id in tcx.body_owners() {
-                    mir::transform::check_unsafety::check_unsafety(tcx, def_id)
-                }
+                tcx.par_body_owners(|def_id| {
+                    tcx.ensure().unsafety_check_result(def_id);
+                })
             });
 
             time(sess, "layout testing", || layout_test::test_layout(tcx));

@@ -213,7 +213,6 @@ impl<'sess> OnDiskCache<'sess> {
                 encode_query_results::<typeck_tables_of<'_>, _>(tcx, enc, qri)?;
                 encode_query_results::<codegen_fulfill_obligation<'_>, _>(tcx, enc, qri)?;
                 encode_query_results::<optimized_mir<'_>, _>(tcx, enc, qri)?;
-                encode_query_results::<unsafety_check_result<'_>, _>(tcx, enc, qri)?;
                 encode_query_results::<borrowck<'_>, _>(tcx, enc, qri)?;
                 encode_query_results::<mir_borrowck<'_>, _>(tcx, enc, qri)?;
                 encode_query_results::<mir_const_qualif<'_>, _>(tcx, enc, qri)?;

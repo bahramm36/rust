@@ -152,7 +152,7 @@ impl<'a, 'tcx> Visitor<'tcx> for UnsafetyChecker<'a, 'tcx> {
                     &AggregateKind::Generator(def_id, _, _) => {
                         let UnsafetyCheckResult {
                             violations, unsafe_blocks
-                        } = self.tcx.unsafety_check_result(def_id);
+                        } = unsafety_check(self.tcx, def_id);
                         self.register_violations(&violations, &unsafe_blocks);
                     }
                 }
@@ -512,9 +512,10 @@ fn check_unused_unsafe<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>,
     hir::intravisit::Visitor::visit_body(&mut visitor, body);
 }
 
-fn unsafety_check_result<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId)
-                                   -> UnsafetyCheckResult
-{
+fn unsafety_check<'tcx>(
+    tcx: TyCtxt<'_, 'tcx, 'tcx>,
+    def_id: DefId
+) -> UnsafetyCheckResult {
     debug!("unsafety_violations({:?})", def_id);
 
     // N.B., this borrow is valid because all the consumers of
@@ -626,18 +627,21 @@ fn builtin_derive_def_id<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) -
     }
 }
 
-pub fn check_unsafety<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) {
+fn unsafety_check_result<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>, def_id: DefId) {
     debug!("check_unsafety({:?})", def_id);
 
-    // closures are handled by their parent fn.
     if tcx.is_closure(def_id) {
+        // closures are handled by their parent fn.
+        let hir = tcx.hir();
+        let node_id = hir.as_local_node_id(def_id).unwrap();
+        tcx.unsafety_check_result(hir.local_def_id(hir.get_parent(node_id)));
         return;
     }
 
     let UnsafetyCheckResult {
         violations,
         unsafe_blocks
-    } = tcx.unsafety_check_result(def_id);
+    } = unsafety_check(tcx, def_id);
 
     for &UnsafetyViolation {
         source_info, description, details, kind
