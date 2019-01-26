@@ -5,6 +5,7 @@ use rustc::hir::map as hir_map;
 use rustc::lint;
 use rustc::middle::{self, reachable, resolve_lifetime, stability};
 use rustc::ty::{self, AllArenas, Resolutions, TyCtxt};
+use rustc::ty::query::queries;
 use rustc::traits;
 use rustc::util::common::{install_panic_hook, time, ErrorReported};
 use rustc::util::profiling::ProfileCategory;
@@ -1284,11 +1285,13 @@ where
                 rustc_traits::lowering::dump_program_clauses(tcx);
             });
 
-            time(sess, "MIR effect checking", || {
+            if cfg!(debug_assertions) {
+                // `unsafety_check_result` should be executed by mir_borrowck.
+                // Ensure that is the case
                 tcx.par_body_owners(|def_id| {
-                    tcx.ensure().unsafety_check_result(def_id);
-                })
-            });
+                    queries::unsafety_check_result::assert_done(tcx, def_id);
+                });
+            }
 
             time(sess, "layout testing", || layout_test::test_layout(tcx));
 

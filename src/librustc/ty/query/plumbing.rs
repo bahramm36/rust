@@ -606,6 +606,23 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         }
     }
 
+    /// Check that a query has already executed
+    pub(super) fn assert_done<Q: QueryDescription<'gcx>>(self, key: Q::Key) -> () {
+        let dep_node = Q::to_dep_node(self, &key);
+
+        if self.dep_graph.try_mark_green(self, &dep_node).is_some() {
+            // It is already green
+            return;
+        }
+
+        match JobOwner::<'_, 'gcx, Q>::try_get(self, DUMMY_SP, &key) {
+            TryGetJob::NotYetStarted(_) => {
+                bug!("query should already be done {}, key={:?}", Q::NAME, key);
+            },
+            TryGetJob::JobCompleted(..) => {}
+        }
+    }
+
     #[allow(dead_code)]
     fn force_query<Q: QueryDescription<'gcx>>(
         self,
@@ -968,6 +985,12 @@ macro_rules! define_queries_inner {
 
             fn handle_cycle_error(tcx: TyCtxt<'_, 'tcx, '_>) -> Self::Value {
                 handle_cycle_error!([$($modifiers)*][tcx])
+            }
+        }
+
+        impl<'a, $tcx, 'lcx> queries::$name<$tcx> {
+            pub fn assert_done(tcx: TyCtxt<'a, $tcx, 'lcx>, key: $K) -> () {
+                tcx.assert_done::<queries::$name<'_>>(key);
             }
         })*
 
