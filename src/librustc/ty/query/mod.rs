@@ -244,7 +244,7 @@ define_queries! { <'tcx>
 
     TypeChecking {
         /// The result of unsafety-checking this def-id.
-        [] fn unsafety_check_result: UnsafetyCheckResult(DefId) -> mir::UnsafetyCheckResult,
+        [] fn unsafety_check_result: UnsafetyCheckResult(DefId) -> (),
 
         /// HACK: when evaluated, this reports a "unsafe derive on repr(packed)" error
         [] fn unsafe_derive_on_repr_packed: UnsafeDeriveOnReprPacked(DefId) -> (),
@@ -269,6 +269,8 @@ define_queries! { <'tcx>
         [] fn check_mod_intrinsics: CheckModIntrinsics(DefId) -> (),
 
         [] fn check_mod_liveness: CheckModLiveness(DefId) -> (),
+
+        [] fn check_mod_impl_wf: CheckModImplWf(DefId) -> (),
 
         [] fn collect_mod_item_types: CollectModItemTypes(DefId) -> (),
 

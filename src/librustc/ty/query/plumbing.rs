@@ -434,7 +434,7 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         debug_assert!(self.dep_graph.is_green(dep_node));
 
         // First we try to load the result from the on-disk cache
-        let result = if Q::cache_on_disk(key.clone()) &&
+        let result = if Q::cache_on_disk(self.global_tcx(), key.clone()) &&
                         self.sess.opts.debugging_opts.incremental_queries {
             let result = Q::try_load_from_disk(self.global_tcx(), prev_dep_node_index);
 
@@ -603,6 +603,23 @@ impl<'a, 'gcx, 'tcx> TyCtxt<'a, 'gcx, 'tcx> {
         } else {
             profq_msg!(self, ProfileQueriesMsg::CacheHit);
             self.sess.profiler(|p| p.record_query_hit(Q::CATEGORY));
+        }
+    }
+
+    /// Check that a query has already executed
+    pub(super) fn assert_done<Q: QueryDescription<'gcx>>(self, key: Q::Key) -> () {
+        let dep_node = Q::to_dep_node(self, &key);
+
+        if self.dep_graph.try_mark_green(self, &dep_node).is_some() {
+            // It is already green
+            return;
+        }
+
+        match JobOwner::<'_, 'gcx, Q>::try_get(self, DUMMY_SP, &key) {
+            TryGetJob::NotYetStarted(_) => {
+                bug!("query should already be done {}, key={:?}", Q::NAME, key);
+            },
+            TryGetJob::JobCompleted(..) => {}
         }
     }
 
@@ -972,17 +989,23 @@ macro_rules! define_queries_inner {
         }
 
         impl<'a, $tcx, 'lcx> queries::$name<$tcx> {
-            /// Ensure that either this query has all green inputs or been executed.
-            /// Executing query::ensure(D) is considered a read of the dep-node D.
-            ///
-            /// This function is particularly useful when executing passes for their
-            /// side-effects -- e.g., in order to report errors for erroneous programs.
-            ///
-            /// Note: The optimization is only available during incr. comp.
-            pub fn ensure(tcx: TyCtxt<'a, $tcx, 'lcx>, key: $K) -> () {
-                tcx.ensure_query::<queries::$name<'_>>(key);
+            pub fn assert_done(tcx: TyCtxt<'a, $tcx, 'lcx>, key: $K) -> () {
+                tcx.assert_done::<queries::$name<'_>>(key);
             }
         })*
+
+        #[derive(Copy, Clone)]
+        pub struct TyCtxtEnsure<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
+            pub tcx: TyCtxt<'a, 'gcx, 'tcx>,
+        }
+
+        impl<'a, $tcx, 'lcx> TyCtxtEnsure<'a, $tcx, 'lcx> {
+            $($(#[$attr])*
+            #[inline(always)]
+            pub fn $name(self, key: $K) {
+                self.tcx.ensure_query::<queries::$name<'_>>(key)
+            })*
+        }
 
         #[derive(Copy, Clone)]
         pub struct TyCtxtAt<'a, 'gcx: 'a+'tcx, 'tcx: 'a> {
@@ -999,6 +1022,15 @@ macro_rules! define_queries_inner {
         }
 
         impl<'a, $tcx, 'lcx> TyCtxt<'a, $tcx, 'lcx> {
+            /// Return a transparent wrapper for `TyCtxt` which ensures queries
+            /// are executed instead of returing their result
+            #[inline(always)]
+            pub fn ensure(self) -> TyCtxtEnsure<'a, $tcx, 'lcx> {
+                TyCtxtEnsure {
+                    tcx: self,
+                }
+            }
+
             /// Return a transparent wrapper for `TyCtxt` which uses
             /// `span` as the location of queries performed through it.
             #[inline(always)]
@@ -1251,6 +1283,7 @@ pub fn force_from_dep_node<'a, 'gcx, 'lcx>(tcx: TyCtxt<'a, 'gcx, 'lcx>,
         DepKind::CheckModPrivacy => { force!(check_mod_privacy, def_id!()); }
         DepKind::CheckModIntrinsics => { force!(check_mod_intrinsics, def_id!()); }
         DepKind::CheckModLiveness => { force!(check_mod_liveness, def_id!()); }
+        DepKind::CheckModImplWf => { force!(check_mod_impl_wf, def_id!()); }
         DepKind::CollectModItemTypes => { force!(collect_mod_item_types, def_id!()); }
         DepKind::Reachability => { force!(reachable_set, LOCAL_CRATE); }
         DepKind::MirKeys => { force!(mir_keys, LOCAL_CRATE); }
@@ -1433,7 +1466,7 @@ macro_rules! impl_load_from_cache {
                 match self.kind {
                     $(DepKind::$dep_kind => {
                         let def_id = self.extract_def_id(tcx).unwrap();
-                        queries::$query_name::cache_on_disk(def_id)
+                        queries::$query_name::cache_on_disk(tcx.global_tcx(), def_id)
                     })*
                     _ => false
                 }
